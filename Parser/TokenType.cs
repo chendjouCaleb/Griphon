@@ -11,7 +11,7 @@ namespace Griphon.Parser
         Comma,
         Dot,
         Percent,
-        Carent,
+        Caret,
         Underscore,
         QuoteMarks,
         Apostrophe,

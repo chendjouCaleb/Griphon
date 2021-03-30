@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Griphon", "Griphon\Griphon.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Parser", "Parser\Parser.csproj", "{ED60C5F2-D1B0-4F2C-88C7-3A050CAF531C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParserTest", "ParserTest\ParserTest.csproj", "{43CEC013-42F8-48C1-9E84-54FA1400BCFC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{ED60C5F2-D1B0-4F2C-88C7-3A050CAF531C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ED60C5F2-D1B0-4F2C-88C7-3A050CAF531C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{ED60C5F2-D1B0-4F2C-88C7-3A050CAF531C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{43CEC013-42F8-48C1-9E84-54FA1400BCFC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{43CEC013-42F8-48C1-9E84-54FA1400BCFC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{43CEC013-42F8-48C1-9E84-54FA1400BCFC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{43CEC013-42F8-48C1-9E84-54FA1400BCFC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -6,24 +6,18 @@ namespace Griphon.Parser
 {
     public class Tokenizer
     {
-        private TokenIndex _index;
         private List<TexToken> _tokens = new List<TexToken>();
+        private ParseStream Stream;
 
-        public string Text { get; private set; }
+        public string Text { get; }
         public bool Parsed { get; private set; } = true;
-
-        public TokenIndex TokenIndex => new TokenIndex(_index);
-
-        public bool HasMore => _index.Index < Text.Length;
-
-
-        public char Current => Text[_index.Index];
-
+        
         public List<TexToken> Tokens => new List<TexToken>(_tokens);
 
         public Tokenizer(string text)
         {
             Text = text;
+            Stream = new ParseStream(text);
         }
 
 
@@ -34,72 +28,45 @@ namespace Griphon.Parser
                 throw new InvalidOperationException("This tokenizer is already parsed.");
             }
 
-            while(HasMore)
+            while(Stream.HasMore)
             {
-                if(Current == TokenNames.BackSlash)
+                if(Stream.Current == TokenNames.BackSlash)
                 {
                     _tokens.Add(ParseCommand());
                 }
 
-                if(Current == TokenNames.OpenBracket)
+                if(Stream.Current == TokenNames.OpenBracket)
                 {
                     _tokens.Add(ParseOpenBracket());
-
-                    if(IsLetter())
-                    {
-                        _tokens.Add(ParseAttributeName());
-                    }
-
                 }
-
-
-                if (Current == TokenNames.CloseBracket)
+                
+                if (Stream.Current == TokenNames.CloseBracket)
                 {
                     _tokens.Add(ParseCloseBracket());
                 }
+                
+                if(Stream.IsLetter())
+                {
+                    _tokens.Add(ParseAttributeName());
+                }
             }
 
-            if (Current == '=')
+            if (Stream.Current == '=')
             {
                 var token = ParseEqualToken();
             }
+
+            Parsed = true;
         }
 
         private TexToken ParseEqualToken()
         {
-            if (Current != '=')
+            if (Stream.Current != '=')
             {
                 throw new InvalidOperationException();
             }
 
-            return new TexToken("=", TokenType.Equal, _index);
-        }
-
-        private TexToken ParseCommand()
-        {
-            if (!HasMore || Current != '\\')
-            {
-                throw new InvalidOperationException();
-            }
-
-            StringBuilder builder = new StringBuilder();
-            builder.Append(Forward());
-
-            if (IsLetter())
-            {
-                builder.Append(Forward());
-            }
-            else
-            {
-                throw new UnexpectedTokenException(this._index);
-            }
-
-            while (HasMore && IsIdentifierChar())
-            {
-                builder.Append(Forward());
-            }
-
-            return new TexToken(builder.ToString(), TokenType.Command, _index);
+            return new TexToken("=", TokenType.Equal, Stream.Index);
         }
 
 
@@ -352,65 +319,7 @@ namespace Griphon.Parser
             return new TexToken(builder.ToString(), TokenType.MathExpression, _index);
         }
 
-        private char Forward()
-        {
-            char value;
+        
 
-            if (HasMore)
-            {
-                value = Current;
-                _index.LineIndex += 1;
-                _index.Index += 1;
-                return value;
-            }
-
-            throw new IndexOutOfRangeException($"There are no token at line ({_index.Line}, {_index.LineIndex}).");
-        }
-
-
-        /// <summary>
-        /// Move cursor to the next char.
-        /// </summary>
-        /// <returns>
-        ///   <code>true</code> if the cursor has been moved.
-        ///   <code>false</code> otherwise.
-        /// </returns>
-        private bool Next()
-        {
-            if (HasMore)
-            {
-                _index.LineIndex += 1;
-                _index.Index += 1;
-                return true;
-            }
-            return false;
-        }
-
-
-        bool IsDigit()
-        {
-            return Current >= '0' && Current <= '9';
-        }
-
-        bool IsLetter()
-        {
-            return (Current >= 'a' && Current <= 'z' || (Current >= 'A' && Current <= 'Z'));
-        }
-
-        bool IsIdentifierChar()
-        {
-            return IsLetter() || IsDigit() || Current == '_' || Current == '-';
-        }
-
-
-        bool IsCurrent(char character)
-        {
-            return HasMore && Current == character;
-        }
-
-        private void ThrowUnExpectedToken(char? character)
-        {
-
-        }
     }
 }
