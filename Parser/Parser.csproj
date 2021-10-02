@@ -5,8 +5,4 @@
     <RootNamespace>Griphon.Parser</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Folder Include="Parsers" />
-  </ItemGroup>
-
 </Project>

@@ -1,23 +1,30 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Griphon.Parser.Parsers;
+using Griphon.Parser.Tokens;
 
 namespace Griphon.Parser
 {
     public class Tokenizer
     {
-        private List<TexToken> _tokens = new List<TexToken>();
+        private List<Token> _tokens = new List<Token>();
         private ParseStream Stream;
 
         public string Text { get; }
         public bool Parsed { get; private set; } = true;
+
+        public int BraceDepth { get; private set; }
         
-        public List<TexToken> Tokens => new List<TexToken>(_tokens);
+        public List<Token> Tokens => new List<Token>(_tokens);
+
+        private TextTokenStream TextTokenStream;
 
         public Tokenizer(string text)
         {
             Text = text;
             Stream = new ParseStream(text);
+            TextTokenStream = new TextTokenStream(Stream);
         }
 
 
@@ -32,128 +39,98 @@ namespace Griphon.Parser
             {
                 if(Stream.Current == TokenNames.BackSlash)
                 {
-                    _tokens.Add(ParseCommand());
+                    AddToken(TextTokenStream.Stop());
+                    _tokens.Add(ParseTag());
                 }
 
-                if(Stream.Current == TokenNames.OpenBracket)
+                else if(Stream.Current == TokenNames.OpenBracket)
                 {
-                    _tokens.Add(ParseOpenBracket());
+                    _tokens.Add(ParseAttributeList());
                 }
                 
-                if (Stream.Current == TokenNames.CloseBracket)
+                else if (Stream.Current == TokenNames.CloseBrace)
                 {
-                    _tokens.Add(ParseCloseBracket());
+                    _tokens.Add(ParseOpenBrace());
                 }
-                
-                if(Stream.IsLetter())
-                {
-                    _tokens.Add(ParseAttributeName());
-                }
-            }
 
-            if (Stream.Current == '=')
-            {
-                var token = ParseEqualToken();
+                else if (Stream.Current == TokenNames.CloseBrace)
+                {
+                    _tokens.Add(ParseCloseBrace());
+                }
+
+                else if (Stream.Current == TokenNames.Percent)
+                {
+                    if (Stream.HasMore && Stream.Forward() == TokenNames.Percent)
+                    {
+                        _tokens.Add(ParseComment());
+                    }
+                    else
+                    {
+                        TextTokenStream.Take(TokenNames.Percent);
+                    }
+                }
+
+                else if (Stream.Current == TokenNames.Ampersand)
+                {
+                    AddToken(TextTokenStream.Stop());
+                    AddToken(ParseHtmlCodeOrEntity());
+                }
+                else
+                {
+                    TextTokenStream.Take();
+                }
             }
+            AddToken(TextTokenStream.Stop());
 
             Parsed = true;
         }
 
-        private TexToken ParseEqualToken()
+        private void AddToken(Token token)
         {
-            if (Stream.Current != '=')
+            if (token != null)
             {
-                throw new InvalidOperationException();
+                _tokens.Add(token);
             }
-
-            return new TexToken("=", TokenType.Equal, Stream.Index);
         }
 
-
-        private TexToken ParseAttributeName()
+        private TagToken ParseTag()
         {
-            if (!HasMore || !IsLetter())
-            {
-                throw new InvalidOperationException("Attribute name must start with a letter");
-            }
-
-            StringBuilder builder = new StringBuilder();
-            builder.Append(Forward());
-
-            while (HasMore && IsIdentifierChar())
-            {
-                builder.Append(Forward());
-            }
-
-            return new TexToken(builder.ToString(), TokenType.AttributeName, _index);
+            return new TagParser(Stream).Parse();
         }
 
-        private TexToken ParseAttributeValue()
+        private AttributeListToken ParseAttributeList()
         {
-            if (!HasMore || IsCurrent(TokenNames.QuoteMarks))
-            {
-                throw new InvalidOperationException($"Attribute value must start with a quoteMarks(\")");
-            }
-
-            StringBuilder builder = new StringBuilder();
-            builder.Append(Forward());
-
-            while(HasMore && Current != TokenNames.QuoteMarks)
-            {
-                builder.Append(Forward());
-            }
-
-            if (!HasMore || Current != TokenNames.QuoteMarks)
-            {
-                throw new ExceptedTokenException("ATTRIBUTE_VALUE_END_ERROR", $"Attribute value must end with a quoteMarks(\")");
-            }
-            builder.Append(Forward());
-
-            return new TexToken(builder.ToString(), TokenType.AttributeValue, _index);
+            return new AttributeListParser(Stream).Parse();
         }
 
-        public TexToken ParseOpenBracket()
+        private CharToken ParseOpenBrace()
         {
-            if(!HasMore || Current != TokenNames.OpenBracket)
+            CharToken token = new CharToken(Stream.Current, Stream.Index);
+            BraceDepth++;
+
+            if (!Stream.HasMore)
             {
-                throw new InvalidOperationException($"Expected '{TokenNames.OpenBracket}' character.");
+                throw new ExceptedTokenException("UNCLOSED_BRACE", "The brace must be closed");
             }
 
-            return new TexToken($"{TokenNames.OpenBracket}", TokenType.OpenBracket, _index);
+            return token;
         }
 
-
-        public TexToken ParseCloseBracket()
+        private CharToken ParseCloseBrace()
         {
-            if (!HasMore || Current != TokenNames.CloseBracket)
+            if (BraceDepth <= 0)
             {
-                throw new InvalidOperationException($"Expected '{TokenNames.CloseBracket}' character.");
+                throw new ExceptedTokenException("OPEN_BRACE_NOT_FOUND", "Cannot close unopened brace");
             }
+            CharToken token = new CharToken(Stream.Current, Stream.Index);
+            BraceDepth--;
 
-            return new TexToken($"{TokenNames.CloseBracket}", TokenType.CloseBracket, _index);
+            return token;
         }
 
-
-
-        public TexToken ParseOpenBrace()
+        private CommentToken ParseComment()
         {
-            if (!HasMore || Current != TokenNames.OpenBrace)
-            {
-                throw new InvalidOperationException($"Expected '{TokenNames.OpenBrace}' character.");
-            }
-
-            return new TexToken($"{TokenNames.OpenBrace}", TokenType.OpenBrace, _index);
-        }
-
-
-        public TexToken ParseCloseBrace()
-        {
-            if (!HasMore || Current != TokenNames.CloseBrace)
-            {
-                throw new InvalidOperationException($"Expected '{TokenNames.CloseBrace}' character.");
-            }
-
-            return new TexToken($"{TokenNames.CloseBrace}", TokenType.CloseBrace, _index);
+            return new CommentParser(Stream).Parse();
         }
 
 
@@ -161,165 +138,34 @@ namespace Griphon.Parser
         /// Parse a html entity code like &#163, &#36; &pound;
         /// </summary>
         /// <returns></returns>
-        public TexToken ParseHtmlCodeOrEntity()
+        public Token ParseHtmlCodeOrEntity()
         {
-            if (!HasMore || Current != TokenNames.Ampersand)
+            if (!Stream.HasMore || Stream.Current != TokenNames.Ampersand)
             {
                 throw new InvalidOperationException($"Expected '{TokenNames.Ampersand}' character at start of html entity or html code).");
             }
             
-            if(HasMore && Current == TokenNames.Hash)
+            if(Stream.HasMore && Stream.Forward() == TokenNames.Hash)
             {
                 return ParseHtmlCode();
-                
             }
-            if (HasMore && IsLetter())
+            if (Stream.HasMore && Stream.IsLetter())
             {
                 return ParseHtmlEntity();
             }
-            throw new UnexpectedTokenException(_index);
+            throw new UnexpectedTokenException(Stream.Index);
 
         }
 
-        public TexToken ParseHtmlCode()
+        public HtmlCodeToken ParseHtmlCode()
         {
-            if(!HasMore || Current != TokenNames.Hash)
-            {
-                throw new InvalidOperationException("The html entity must start with a &#");
-            }
-
-            StringBuilder builder = new StringBuilder();
-            builder.Append(TokenNames.Ampersand);
-            builder.Append(TokenNames.Hash);
-
-            if (!HasMore || !IsDigit())
-            {
-                throw new UnexpectedTokenException(this._index, "HTML_CODE_MALFORMED", "The html code must have only digit after the # character.");
-            }
-
-            builder.Append(Forward());
-
-            while (HasMore && IsDigit())
-            {
-                builder.Append(Forward());
-            }
-
-            if (!HasMore)
-            {
-                throw new UnexpectedTokenException(this._index, "HTML_CODE_INCOMPLETED", "The html code is incompleted.");
-            }
-
-            if (Current != TokenNames.SemiColon)
-            {
-                throw new UnexpectedTokenException(this._index, "HTML_CODE_BAD_END", "The html code must end with the semicolon(;) character.");
-            }
-
-            builder.Append(Forward());
-            return new TexToken(builder.ToString(), TokenType.HtmlCode, _index);
+            return new HtmlCodeParser(Stream).Parse();
         }
 
 
-        public TexToken ParseHtmlEntity()
+        public HtmlEntityToken ParseHtmlEntity()
         {
-            StringBuilder builder = new StringBuilder();
-            builder.Append(TokenNames.Ampersand);
-
-            if (!HasMore || !IsLetter())
-            {
-                throw new UnexpectedTokenException(this._index, "HTML_ENTITY_MALFORMED", "The html entity must have only letter after the & character.");
-            }
-
-            builder.Append(Forward());
-
-            while (HasMore && IsLetter())
-            {
-                builder.Append(Forward());
-            }
-
-            if (!HasMore)
-            {
-                throw new UnexpectedTokenException(this._index, "HTML_ENTITY_INCOMPLETED", "The html entity is incompleted.");
-            }
-
-            if (Current != TokenNames.SemiColon)
-            {
-                throw new UnexpectedTokenException(this._index, "HTML_ENTITY_BAD_END", "The html enitty must end with the semicolon(;) character.");
-            }
-
-            builder.Append(Forward());
-            return new TexToken(builder.ToString(), TokenType.HtmlEntity, _index);
+            return new HtmlEntityParser(Stream).Parse();
         }
-
-        /// <summary>
-        /// Parse the comment.
-        /// The comment start with %% and end with %%;
-        /// </summary>
-        /// <returns></returns>
-        public TexToken ParseComment()
-        {
-            StringBuilder builder = new StringBuilder();
-            builder.Append(TokenNames.Percent);
-
-            if(!HasMore || Current != TokenNames.Percent)
-            {
-                throw new InvalidOperationException($"Comment must starts with '%%'.");
-            }
-            builder.Append(Forward());
-
-            while(HasMore && Current != TokenNames.Percent)
-            {
-                builder.Append(Forward());
-
-            }
-
-            while(HasMore && Current == TokenNames.Percent)
-            {
-                 builder.Append(Forward());
-                if (!HasMore)
-                {
-                    throw new ExceptedTokenException("COMMENT_BAD_END", "Comment must ends with %%");
-                }
-                //Eat the second %
-                if (HasMore && Current == TokenNames.Percent)
-                {
-                    builder.Append(Forward());
-                    break;
-                }
-                while (HasMore && Current != TokenNames.Percent)
-                {
-                    builder.Append(Forward());
-
-                }
-            }
-            return new TexToken(builder.ToString(), TokenType.Comment, _index);
-        }
-
-
-        public TexToken ParseMathExpression()
-        {
-            if (!HasMore || Current != TokenNames.Dollar)
-            {
-                throw new InvalidOperationException();
-            }
-
-            StringBuilder builder = new StringBuilder();
-            builder.Append(Forward());
-
-            while(HasMore && Current != TokenNames.Dollar)
-            {
-                builder.Append(Forward());
-            }
-
-            if (!HasMore || Current != TokenNames.Dollar)
-            {
-                throw new ExceptedTokenException("MATH_END_ERROR", "The math expression must end with a '$' character");
-            }
-            builder.Append(Forward());
-
-            return new TexToken(builder.ToString(), TokenType.MathExpression, _index);
-        }
-
-        
-
     }
 }

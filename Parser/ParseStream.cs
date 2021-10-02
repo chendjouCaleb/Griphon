@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Griphon.Parser
+﻿namespace Griphon.Parser
 {
     public class ParseStream
     {
@@ -9,7 +7,8 @@ namespace Griphon.Parser
         public string Text { get; }
         public TokenIndex Index => new TokenIndex(_index);
 
-        public bool HasMore => _index.Index < Text.Length;
+        public bool HasMore => _index.Index < Text.Length - 1;
+        public bool IsLast => Text.Length == 0 || _index.Index == Text.Length - 1;
         
         public char Current => Text[_index.Index];
 
@@ -21,11 +20,11 @@ namespace Griphon.Parser
 
         public bool IsCurrent(char character)
         {
-            return HasMore && Current == character;
+            return Current == character;
         }
         public bool IsLetter()
         {
-            return (Current >= 'a' && Current <= 'z' || (Current >= 'A' && Current <= 'Z'));
+            return Current >= 'a' && Current <= 'z' || (Current >= 'A' && Current <= 'Z');
         }
         
         public bool IsIdentifierChar()
@@ -58,17 +57,14 @@ namespace Griphon.Parser
         
         public char Forward()
         {
-            char value;
-
             if (HasMore)
             {
-                value = Current;
-                _index.LineIndex += 1;
-                _index.Index += 1;
-                return value;
+                Next();
+                return Current;
             }
+            return '\0';
 
-            throw new IndexOutOfRangeException($"There are no token at line ({_index.Line}, {_index.LineIndex}).");
+            //throw new IndexOutOfRangeException($"There are no token at line ({_index.Line}, {_index.LineIndex}).");
         }
     }
 }
